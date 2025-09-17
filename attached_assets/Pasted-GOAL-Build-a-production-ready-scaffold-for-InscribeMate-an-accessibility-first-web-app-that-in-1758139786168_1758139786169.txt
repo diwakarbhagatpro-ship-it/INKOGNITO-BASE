@@ -1,0 +1,108 @@
+GOAL
+Build a production-ready scaffold for **InscribeMate** — an accessibility-first web app that instantly matches blind users with volunteer scribes. Generate a fully functional front-end & backend scaffold, Supabase schema + edge functions for matchmaking, INSEE AI integration (Gemini API), TTS & multi-language support, geolocation, real-time notifications, dashboards for both user types, and deployment config. Make it modern, accessible (WCAG 2.1), and visually bold: dark theme (black background, white typography) with a bright accent GREEN.
+
+VISUAL / THEME
+- UI library: **MUI (Material UI v5+)**. Use MUI components & theming.
+- Theme: Dark mode base: background #000000 (or near-black), text: #FFFFFF. Accent: vibrant green (#00C853 or similar).
+- Typography: High-contrast, large sizes for accessibility; clear hierarchy.
+- Style: Minimal, bold cards; clear icons; good spacing; focus outlines visible.
+- Palette instruction: "Dark background + white font; accent green for CTAs and highlights."
+
+HIGH-LEVEL ARCHITECTURE
+- Frontend: React + Vite, TypeScript, MUI, React Router, React Query (or SWR), Context for auth + INSEE chat state.
+- Backend: Supabase as the primary backend (Auth, PostgreSQL, Realtime, Edge Functions). Optional thin Node/Express layer only for third-party secret orchestration if required.
+- Database: Supabase PostgreSQL with row-level security (RLS).
+- Matchmaking: Implement inside Supabase using SQL, Postgres functions/triggers and Supabase Edge Functions for orchestration; weighted matching logic (proximity, availability window, reliability score, badges).
+- AI: INSEE (AI assistant) connected to **Gemini API** for conversational guidance, translation, text simplification. Calls must be sanitized/anonymized.
+- Integrations/APIs: Geolocation API (for distance calculations), TTS API (for spoken UI), Multi-language translation API, Email/SMS provider (Twilio/SendGrid).
+- Realtime: Supabase Realtime channels for instant notifications and status updates.
+- Hosting / Deploy: Replit / Vercel / Supabase; include Dockerfile and CI hints (GitHub Actions template).
+
+FEATURE SET (MVP)
+A. Universal (non-negotiable) features:
+  - Secure auth (Supabase Auth) + roles: blind_user, volunteer, admin.
+  - Profile pages with availability, languages, badges.
+  - Create request flow: exam/event form (date/time/location + preferences).
+  - Matchmaking pipeline: instant match + backup strategy.
+  - Realtime notifications & reminders (in-app + SMS/email fallback).
+  - INSEE conversational widget: voice/text interaction powered by Gemini API.
+  - TTS playback for blind users; adjustable speech rate & language.
+  - Data logging of matches, ratings, history.
+  - Accessibility compliance (WCAG): keyboard navigation, ARIA labels, focus management.
+  - Security: HTTPS-only calls, RLS, encryption, secrets via environment variables.
+
+B. Dashboards / Pages to scaffold:
+  - Landing / About / Accessibility statement
+  - Auth pages: Sign up / Login / Password reset
+  - Blind user dashboard:
+    - Quick “Request Scribe” button + Recent requests list
+    - INSEE conversational panel (voice-first)
+    - Request history, upcoming events, reminders
+    - Rating & feedback for volunteers
+  - Volunteer dashboard:
+    - Incoming requests feed (Accept / Decline)
+    - Availability calendar & preferences
+    - Past assistance, badges, reliability score
+  - Admin dashboard:
+    - User management, logs, manual match override, metrics
+  - Shared components:
+    - Map component showing approximate volunteer density
+    - Notification center
+    - Coming Soon banner for features not yet ready (e.g., Voice Calling)
+    - Settings (language, TTS preferences, privacy)
+
+C. UX / Small copy & flags:
+  - Show “Calling — Coming Soon” on request details if calling is not implemented.
+  - Use short, friendly microcopy for INSEE prompts: e.g., “INSEE: I found 2 volunteers nearby. Connect now?”
+  - Keep all screens readable with large buttons and clear contrast.
+
+DATA MODEL (concise)
+- users: id, role, name, language_pref, contact_masked, exact_contact(encrypted), location_point, availability (json/calendar), badges, reliability_score, created_at
+- requests: id, user_id, exam_time, location_point, preferences(json), status(pending/confirmed/completed), matched_volunteer_id, created_at
+- volunteers: user_id (FK), languages, rating, accept_rate, last_seen
+- matches: id, request_id, volunteer_id, assigned_at, confirmed_at, outcome, feedback
+- audit_logs: event, user_id, payload (retention policy)
+- rls policies: users can only access their own rows; volunteers can view pending requests but contact info only after confirmation.
+
+MATCHMAKING LOGIC (brief)
+- Inputs: request (user_id, time window, approximate location), volunteer pool (available + within time window).
+- Score = w1*(proximity) + w2*(availability match) + w3*(reliability_score) + w4*(language_match) + w5*(recent_accept_rate).
+- Implement as: SQL function to compute candidate scores + Supabase Edge Function to run selection, notify primary & parallel backup, write transactionally to match table.
+
+SECURITY & COMPLIANCE (must-haves)
+- RLS for all tables, HTTPS/TLS enforced, environment secrets in Supabase / Replit secrets.
+- Location consent flow; store approximate coordinates only or ephemeral precise coords with short TTL.
+- Anonymize data passed to Gemini AI; never include full PII in prompt.
+- Data retention policy: purge location logs after X days; user data deletion endpoint.
+
+DEV / DEPLOY INSTRUCTIONS
+- Generate a runnable monorepo scaffold:
+  - `/web` — React + Vite + MUI + pages
+  - `/api` — Supabase edge functions + optional Node helpers
+  - `/db` — SQL migrations (tables, policies, functions)
+  - `.replit` and Dockerfile and GitHub Action workflow for CI
+- Provide example `.env.example` with placeholders: SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY, TTS_KEY, TWILIO/EMAIL keys.
+- Include seed script: create demo blind_user, volunteer, sample requests.
+
+TESTS & QA
+- Unit tests for matchmaking function (JS+SQL tests).
+- Accessibility smoke tests (axe-core) and keyboard-only walkthrough.
+- End-to-end test scenario: create request → INSEE confirmation → match → notification.
+
+DELIVERABLES (what I expect)
+1. Complete scaffold pushed to repo with run scripts (`npm run dev`, `npm run build`, `supabase start`).
+2. SQL migration + edge function implementing matchmaking sample logic.
+3. React components for both dashboards + INSEE chat widget (mock Gemini response if API key missing).
+4. Theme implemented (dark + white typography + green accents).
+5. README with setup steps, env config, deploy guide.
+6. Clear TODO flags in UI for future features (e.g., Calling — Coming Soon).
+
+ICONS (for PPT/eraser.io)
+- Provide a list for icons: React, Vite, TypeScript, MUI, Supabase, PostgreSQL, Gemini / Google AI, Node.js (optional), Twilio, SendGrid, TTS provider, Geolocation provider.
+
+NOTES / NON-FUNCTIONAL
+- Keep code modular and accessible-first.
+- Keep the INSEE prompts minimal and privacy-first.
+- Use server-side functions in Supabase where possible for sensitive logic.
+
+FINAL: Produce the scaffold and initial implementation per above. If Gemini key is missing, the agent should stub INSEE with a deterministic mock and label it "AI (Gemini) – Mocked until key provided." Ensure all environment values are configurable and secrets never committed.

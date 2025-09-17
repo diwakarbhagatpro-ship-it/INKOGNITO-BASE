@@ -1,0 +1,51 @@
+add three contarst mode on nav bar low medium and a language change icon having major indian language with language api and You are a senior full-stack engineer working on InscribeMate, a real-time web app for volunteer scribes and exam takers. 
+Write clean, modular, and scalable code with comments that explain key steps. 
+Follow these BESTSTR rules: 
+B – Best Practices → Use clear naming, modular functions, reusable components.  
+E – Error Handling → Gracefully catch and log errors, provide fallback messages.  
+S – Security → Sanitize inputs, never expose API keys, protect user data.  
+T – Testing → Include unit test stubs (Jest/React Testing Library).  
+S – Scalability → Design with future growth in mind (async APIs, modular backend).  
+T – Type Safety → Use TypeScript types/interfaces (or JSDoc if JS).  
+R – Readability → Comment clearly, maintain consistent style, avoid magic numbers.  
+When writing code:  
+- Use environment variables for secrets.  
+- Prefer async/await over callbacks.  
+- Ensure accessibility (WCAG standards).  
+- Optimize for Vercel deployment.  
+Always explain what you’re doing in brief docstrings, and suggest improvements for performance or maintainability.and high ai name insi through the gemni api key integration in the form of co pilot types chatbot visual assitant tts based  and a community interface which template already have i am using a blog template so make the coummunity section active connected with supabase .
+
+🌟 2. Non-Negotiable Features for InscribeMate (Web App)
+
+Since InscribeMate is about exam assistance, volunteer scribes, and accessibility, these are must-have features for credibility and adoption:
+
+Accessibility First (WCAG-certified UI)
+
+Screen reader compatibility
+High contrast + keyboard navigation
+Voice input (integration with Whisper or Web Speech API)
+Real-time Collaboration
+
+Live chat or audio link between scribe and student
+Instant notifications for connection requests
+Scheduling + Backup Scribes
+
+Calendar integration (Google/Outlook)
+Auto-assign backup scribes if one cancels
+Identity & Trust
+
+Verified volunteer badges / micro-credentials
+Activity history & reputation system
+Localization / Multi-language
+
+Translation layer for both scribes & students
+RTL (right-to-left) support for scripts like Urdu/Arabic/Hebrew
+Resilience & Offline Fallbacks
+
+Auto-save exam transcripts in case of disconnect
+Ability to rejoin a session smoothly
+Privacy & Compliance
+
+GDPR-ready storage of sensitive data
+Role-based permissions (student, scribe, admin)
+⚡ If you nail accessibility + real-time reliability + trust badges, InscribeMate becomes way more defensible compared to generic chat/collab tools
