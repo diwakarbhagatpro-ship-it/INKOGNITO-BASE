@@ -21,16 +21,27 @@ import { UserDashboard } from '@/components/UserDashboard';
 import { RequestScribeCard } from '@/components/RequestScribeCard';
 import { InseeAssistant } from '@/components/InseeAssistant';
 import { Logo } from '@/components/Logo';
+import { DetailedPreloader } from '@/components/Preloader';
+import { useAppLoading } from '@/hooks/usePreloader';
+import { PreloaderDemo } from '@/components/PreloaderDemo';
 
 // Authentication wrapper component
 const AuthenticatedApp: React.FC = () => {
   const { user, loading } = useAuth();
   const [showSignUp, setShowSignUp] = useState(false);
+  const { isAppLoading, loadingMessage } = useAppLoading();
 
   // Initialize TTS on app load
   useEffect(() => {
-    tts.speak('Welcome to InscribeMate, your accessibility-first scribe platform');
-  }, []);
+    if (!isAppLoading) {
+      tts.speak('Welcome to InscribeMate, your accessibility-first scribe platform');
+    }
+  }, [isAppLoading]);
+
+  // Show app preloader
+  if (isAppLoading) {
+    return <DetailedPreloader isLoading={true} message={loadingMessage} />;
+  }
 
   if (loading) {
     return (
@@ -144,6 +155,7 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
         <Route path="/" component={DashboardPage} />
         <Route path="/request" component={RequestPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/preloader-demo" component={PreloaderDemo} />
         {/* Fallback to 404 */}
         <Route component={NotFound} />
       </Switch>

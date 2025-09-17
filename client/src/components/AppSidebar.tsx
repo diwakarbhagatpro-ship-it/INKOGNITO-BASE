@@ -1,4 +1,4 @@
-import { Home, Users, Settings, UserCheck, Shield, Calendar, MessageSquare } from 'lucide-react';
+import { Home, Users, Settings, UserCheck, Shield, Calendar, MessageSquare, Loader2 } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -61,6 +61,12 @@ const menuItems: MenuItem[] = [
     title: 'Settings',
     url: '/settings',
     icon: Settings,
+    roles: ['blind_user', 'volunteer', 'admin'],
+  },
+  {
+    title: 'Preloader Demo',
+    url: '/preloader-demo',
+    icon: Loader2,
     roles: ['blind_user', 'volunteer', 'admin'],
   },
 ];

@@ -16,6 +16,7 @@ import { useTTS } from '@/lib/tts';
 import { useGeolocation } from '@/lib/geolocation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { LoadingSpinner } from './LoadingSpinner';
 
 interface VolunteerMatch {
   volunteer_id: string;
