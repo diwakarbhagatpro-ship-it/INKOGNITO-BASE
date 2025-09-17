@@ -3,7 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, MicOff, Send, Volume2, VolumeX, Bot } from 'lucide-react';
+import { Mic, MicOff, Send, Volume2, VolumeX } from 'lucide-react';
+import { Logo } from '@/components/Logo';
+import { useGemini } from '@/lib/gemini';
+import { useTTS } from '@/lib/tts';
+import { useAuth } from '@/contexts/AuthContext';
+import { useGeolocation } from '@/lib/geolocation';
 
 type Message = {
   id: string;
@@ -13,6 +18,11 @@ type Message = {
 };
 
 export function InseeAssistant() {
+  const { generateResponse } = useGemini();
+  const { speak, stop, isSpeaking, isPaused, pause, resume } = useTTS();
+  const { user } = useAuth();
+  const { getCachedLocation } = useGeolocation();
+  
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -23,9 +33,10 @@ export function InseeAssistant() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -33,8 +44,8 @@ export function InseeAssistant() {
     }
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -44,33 +55,115 @@ export function InseeAssistant() {
     };
 
     setMessages(prev => [...prev, userMessage]);
-    console.log('User message sent:', inputValue);
-    
-    // Simulate AI response
-    // TODO: Replace with actual Gemini API integration
-    setTimeout(() => {
+    setInputValue('');
+    setIsLoading(true);
+
+    try {
+      // Get user context
+      const userLocation = getCachedLocation();
+      const context = {
+        userRole: user?.user_metadata?.role || 'blind_user',
+        currentPage: window.location.pathname,
+        userLocation: userLocation ? {
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+          address: userLocation.address,
+        } : undefined,
+      };
+
+      // Generate AI response
+      const response = await generateResponse(inputValue, context);
+      
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: `I understand you said: "${inputValue}". This is a mock response. In the full application, this will be powered by Gemini AI for intelligent assistance.`,
+        text: response,
         isUser: false,
         timestamp: new Date(),
       };
+      
       setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
-
-    setInputValue('');
+      
+      // Speak the response
+      speak(response);
+    } catch (error) {
+      console.error('Error generating response:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: 'I apologize, but I encountered an error processing your request. Please try again.',
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      speak('I apologize, but I encountered an error processing your request. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleVoiceInput = () => {
-    setIsListening(!isListening);
-    console.log('Voice input toggled:', !isListening);
-    // TODO: Implement Web Speech API integration
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      speak('Voice input is not supported by your browser');
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      speak('Voice input stopped');
+    } else {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        speak('Listening...');
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInputValue(transcript);
+        speak(`You said: ${transcript}`);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        speak('Voice input error. Please try again.');
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    }
   };
 
   const toggleTextToSpeech = () => {
-    setIsSpeaking(!isSpeaking);
-    console.log('Text-to-speech toggled:', !isSpeaking);
-    // TODO: Implement TTS for last AI message
+    if (isSpeaking()) {
+      if (isPaused()) {
+        resume();
+        speak('Resuming speech');
+      } else {
+        pause();
+        speak('Speech paused');
+      }
+    } else {
+      // Speak the last AI message
+      const lastAiMessage = messages.filter(m => !m.isUser).pop();
+      if (lastAiMessage) {
+        speak(lastAiMessage.text);
+      } else {
+        speak('No AI message to read');
+      }
+    }
   };
 
   if (!isExpanded) {
@@ -82,7 +175,7 @@ export function InseeAssistant() {
         aria-label="Open INSEE AI Assistant"
         data-testid="button-insee-open"
       >
-        <Bot className="h-6 w-6" />
+        <Logo size={24} showText={false} />
       </Button>
     );
   }
@@ -92,7 +185,7 @@ export function InseeAssistant() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
+            <Logo size={16} showText={false} className="text-primary" />
             INSEE AI Assistant
           </CardTitle>
           <Button
@@ -154,20 +247,24 @@ export function InseeAssistant() {
               variant="ghost"
               size="icon"
               onClick={toggleTextToSpeech}
-              className={isSpeaking ? 'text-primary' : 'text-muted-foreground'}
-              aria-label={isSpeaking ? 'Stop speaking' : 'Read aloud'}
+              className={isSpeaking() ? 'text-primary' : 'text-muted-foreground'}
+              aria-label={isSpeaking() ? (isPaused() ? 'Resume speaking' : 'Pause speaking') : 'Read aloud'}
               data-testid="button-tts"
             >
-              {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              {isSpeaking() ? (isPaused() ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />) : <Volume2 className="h-4 w-4" />}
             </Button>
             <Button
               onClick={handleSendMessage}
-              disabled={!inputValue.trim()}
+              disabled={!inputValue.trim() || isLoading}
               size="icon"
               aria-label="Send message"
               data-testid="button-send-message"
             >
-              <Send className="h-4 w-4" />
+              {isLoading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
