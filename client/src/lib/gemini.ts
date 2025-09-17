@@ -18,7 +18,7 @@ export class GeminiService {
   }
 
   private initialize() {
-    const apiKey = process.env.VITE_GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       console.warn('Gemini API key not found. INSEE assistant will use mock responses.');
       return;
