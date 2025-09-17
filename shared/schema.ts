@@ -144,3 +144,125 @@ export type RequestStatus = 'pending' | 'matched' | 'in_progress' | 'completed' 
 export type SessionStatus = 'scheduled' | 'active' | 'completed' | 'cancelled';
 export type ApplicationStatus = 'pending' | 'accepted' | 'rejected';
 export type UrgencyLevel = 'low' | 'normal' | 'high' | 'critical';
+
+// API Route Validation Schemas
+export const updateRequestSchema = z.object({
+  status: z.enum(['pending', 'matched', 'in_progress', 'completed', 'cancelled']).optional(),
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+  scheduledDate: z.string().datetime().optional(),
+  duration: z.number().int().min(15).max(480).optional(), // 15 minutes to 8 hours
+  urgency: z.enum(['low', 'normal', 'high', 'critical']).optional(),
+  specialRequirements: z.string().optional(),
+  estimatedDifficulty: z.number().int().min(1).max(5).optional(),
+});
+
+export const updateSessionSchema = z.object({
+  status: z.enum(['scheduled', 'active', 'completed', 'cancelled']).optional(),
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
+  actualDuration: z.number().int().min(0).optional(),
+  notes: z.string().optional(),
+  userRating: z.number().int().min(1).max(5).optional(),
+  volunteerRating: z.number().int().min(1).max(5).optional(),
+  userFeedback: z.string().optional(),
+  volunteerFeedback: z.string().optional(),
+});
+
+export const updateUserSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  phoneNumber: z.string().max(20).optional(),
+  location: z.object({
+    lat: z.number(),
+    lng: z.number(),
+    address: z.string(),
+  }).optional(),
+  languages: z.array(z.string()).optional(),
+  availability: z.record(z.any()).optional(),
+  preferences: z.record(z.any()).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateApplicationStatusSchema = z.object({
+  status: z.enum(['pending', 'accepted', 'rejected']).optional(),
+});
+
+// Query parameter validation schemas
+export const getUsersQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  role: z.enum(['blind_user', 'volunteer', 'admin']).optional(),
+});
+
+export const getRequestsQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  status: z.enum(['pending', 'matched', 'in_progress', 'completed', 'cancelled']).optional(),
+});
+
+export const getSessionsQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  volunteerId: z.string().uuid().optional(),
+});
+
+export const getChatHistoryQuerySchema = z.object({
+  userId: z.string().uuid(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const getMatchesQuerySchema = z.object({
+  radius: z.coerce.number().min(1).max(100).default(25),
+});
+
+// POST body schemas for chat
+export const chatRequestSchema = z.object({
+  userId: z.string().uuid(),
+  message: z.string().min(1).max(2000),
+  sessionId: z.string().uuid().optional(),
+  context: z.record(z.any()).optional(),
+});
+
+// Business Logic Validation Helper Functions
+export function isValidStatusTransition(
+  currentStatus: RequestStatus, 
+  newStatus: RequestStatus
+): boolean {
+  const validTransitions: Record<RequestStatus, RequestStatus[]> = {
+    pending: ['matched', 'cancelled'],
+    matched: ['in_progress', 'cancelled'],
+    in_progress: ['completed', 'cancelled'],
+    completed: [], // Final state
+    cancelled: [], // Final state
+  };
+  
+  return validTransitions[currentStatus]?.includes(newStatus) || false;
+}
+
+export function isValidSessionStatusTransition(
+  currentStatus: SessionStatus | null, 
+  newStatus: SessionStatus
+): boolean {
+  const validTransitions: Record<SessionStatus | 'null', SessionStatus[]> = {
+    null: ['scheduled'],
+    scheduled: ['active', 'cancelled'],
+    active: ['completed', 'cancelled'],
+    completed: [], // Final state
+    cancelled: [], // Final state
+  };
+  
+  const currentKey = currentStatus || 'null';
+  return validTransitions[currentKey as keyof typeof validTransitions]?.includes(newStatus) || false;
+}
+
+export function isValidApplicationStatusTransition(
+  currentStatus: ApplicationStatus | null, 
+  newStatus: ApplicationStatus
+): boolean {
+  const validTransitions: Record<ApplicationStatus | 'null', ApplicationStatus[]> = {
+    null: ['pending'],
+    pending: ['accepted', 'rejected'],
+    accepted: [], // Final state
+    rejected: [], // Final state
+  };
+  
+  const currentKey = currentStatus || 'null';
+  return validTransitions[currentKey as keyof typeof validTransitions]?.includes(newStatus) || false;
+}

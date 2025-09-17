@@ -45,6 +45,7 @@ export interface IStorage {
   // Volunteer applications
   getApplicationsForRequest(requestId: string): Promise<(VolunteerApplication & { volunteer: User })[]>;
   getApplicationsByVolunteer(volunteerId: string): Promise<(VolunteerApplication & { request: ScribeRequest })[]>;
+  getApplicationByIdForValidation(id: string): Promise<VolunteerApplication | undefined>;
   createVolunteerApplication(application: NewVolunteerApplication): Promise<VolunteerApplication>;
   updateApplicationStatus(id: string, status: ApplicationStatus): Promise<VolunteerApplication>;
   
@@ -290,13 +291,53 @@ export class MemStorage implements IStorage {
   }
 
   async getSessionsByUser(userId: string): Promise<ScribeSessionWithDetails[]> {
-    // Placeholder implementation
-    return [];
+    const sessions = Array.from(this.scribeSessions.values())
+      .filter(session => session.userId === userId);
+    
+    const sessionsWithDetails: ScribeSessionWithDetails[] = [];
+    for (const session of sessions) {
+      const request = await this.getScribeRequest(session.requestId);
+      const user = await this.getUser(session.userId);
+      const volunteer = await this.getUser(session.volunteerId);
+      
+      if (request && user && volunteer) {
+        sessionsWithDetails.push({
+          ...session,
+          request,
+          user,
+          volunteer
+        });
+      }
+    }
+    
+    return sessionsWithDetails.sort((a, b) => 
+      b.createdAt!.getTime() - a.createdAt!.getTime()
+    );
   }
 
   async getSessionsByVolunteer(volunteerId: string): Promise<ScribeSessionWithDetails[]> {
-    // Placeholder implementation
-    return [];
+    const sessions = Array.from(this.scribeSessions.values())
+      .filter(session => session.volunteerId === volunteerId);
+    
+    const sessionsWithDetails: ScribeSessionWithDetails[] = [];
+    for (const session of sessions) {
+      const request = await this.getScribeRequest(session.requestId);
+      const user = await this.getUser(session.userId);
+      const volunteer = await this.getUser(session.volunteerId);
+      
+      if (request && user && volunteer) {
+        sessionsWithDetails.push({
+          ...session,
+          request,
+          user,
+          volunteer
+        });
+      }
+    }
+    
+    return sessionsWithDetails.sort((a, b) => 
+      b.createdAt!.getTime() - a.createdAt!.getTime()
+    );
   }
 
   async createScribeSession(newSession: NewScribeSession): Promise<ScribeSession> {
@@ -329,13 +370,44 @@ export class MemStorage implements IStorage {
     return updatedSession;
   }
 
-  // Placeholder implementations for other methods
   async getApplicationsForRequest(requestId: string): Promise<(VolunteerApplication & { volunteer: User })[]> {
-    return [];
+    const applications = Array.from(this.volunteerApplications.values())
+      .filter(app => app.requestId === requestId);
+    
+    const applicationsWithVolunteers: (VolunteerApplication & { volunteer: User })[] = [];
+    for (const application of applications) {
+      const volunteer = await this.getUser(application.volunteerId);
+      if (volunteer) {
+        applicationsWithVolunteers.push({
+          ...application,
+          volunteer
+        });
+      }
+    }
+    
+    return applicationsWithVolunteers.sort((a, b) => 
+      parseFloat(b.matchScore || '0') - parseFloat(a.matchScore || '0')
+    );
   }
 
   async getApplicationsByVolunteer(volunteerId: string): Promise<(VolunteerApplication & { request: ScribeRequest })[]> {
-    return [];
+    const applications = Array.from(this.volunteerApplications.values())
+      .filter(app => app.volunteerId === volunteerId);
+    
+    const applicationsWithRequests: (VolunteerApplication & { request: ScribeRequest })[] = [];
+    for (const application of applications) {
+      const request = this.scribeRequests.get(application.requestId);
+      if (request) {
+        applicationsWithRequests.push({
+          ...application,
+          request
+        });
+      }
+    }
+    
+    return applicationsWithRequests.sort((a, b) => 
+      b.appliedAt!.getTime() - a.appliedAt!.getTime()
+    );
   }
 
   async createVolunteerApplication(application: NewVolunteerApplication): Promise<VolunteerApplication> {
@@ -350,6 +422,10 @@ export class MemStorage implements IStorage {
     };
     this.volunteerApplications.set(id, app);
     return app;
+  }
+
+  async getApplicationByIdForValidation(id: string): Promise<VolunteerApplication | undefined> {
+    return this.volunteerApplications.get(id);
   }
 
   async updateApplicationStatus(id: string, status: ApplicationStatus): Promise<VolunteerApplication> {
