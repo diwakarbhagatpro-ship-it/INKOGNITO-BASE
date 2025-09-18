@@ -29,6 +29,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    host: process.env.VITE_HOST || 'localhost',
+    port: parseInt(process.env.VITE_PORT || '5173', 10),
+    strictPort: false,
     fs: {
       strict: true,
       deny: ["**/.*"],

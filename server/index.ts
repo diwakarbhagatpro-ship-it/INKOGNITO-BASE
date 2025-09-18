@@ -30,8 +30,14 @@ app.use(cors({
   origin: [
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://localhost:8080",
+    "http://localhost:4000",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:4000",
+    "http://0.0.0.0:5173",
+    "http://0.0.0.0:3000",
     process.env.CORS_ORIGIN || "http://localhost:5173"
   ],
   credentials: true,
@@ -101,11 +107,14 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+  const host = process.env.HOST || '0.0.0.0';
+  
   server.listen({
     port,
-    host: "0.0.0.0",
+    host,
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    log(`serving on ${host}:${port}`);
+    log(`CORS enabled for: ${process.env.CORS_ORIGIN || 'http://localhost:5173'}`);
   });
 })();
