@@ -1,133 +1,115 @@
-import type { Request, Response, NextFunction } from "express";
-import { storage } from "../storage";
-import { z } from "zod";
+import { Request, Response, NextFunction } from 'express';
+import { supabaseServer } from '../lib/supabaseServer';
 
-// User type is already declared in supabaseAuth.ts
+export interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+    [key: string]: any;
+  };
+}
 
-// Basic session validation schema
-const sessionValidationSchema = z.object({
-  userId: z.string().uuid(),
-  role: z.enum(['blind_user', 'volunteer', 'admin']).optional(),
-});
-
-/**
- * Simple authentication middleware for API routes
- * In production, this should be replaced with proper session/JWT authentication
- */
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    // Check for userId in query parameters or headers
-    const userId = req.query.userId as string || req.headers['x-user-id'] as string;
+    const authHeader = req.headers.authorization;
     
-    if (!userId) {
-      return res.status(401).json({ 
-        error: "Authentication required",
-        details: "userId must be provided in query parameters or x-user-id header"
-      });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization header missing or invalid' });
     }
 
-    // Validate userId format
-    const validation = sessionValidationSchema.safeParse({ userId });
-    if (!validation.success) {
-      return res.status(401).json({ 
-        error: "Invalid authentication format",
-        details: validation.error.errors
-      });
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    // Verify the JWT token with Supabase
+    const { data: { user }, error } = await supabaseServer.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    // Check if user exists and is active
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
+    // Get user profile from our database
+    const { data: profile, error: profileError } = await supabaseServer
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
+      return res.status(500).json({ error: 'Failed to fetch user profile' });
     }
 
-    if (user.isActive === false) {
-      return res.status(401).json({ error: "User account is inactive" });
-    }
-
-    // Attach user to request
+    // Attach user info to request
     req.user = {
       id: user.id,
-      role: user.role,
-      email: user.email,
+      email: user.email || '',
+      role: profile?.role || 'blind_user',
+      ...profile
     };
 
     next();
   } catch (error) {
-    console.error("Authentication error:", error);
-    res.status(500).json({ error: "Internal authentication error" });
+    console.error('Auth middleware error:', error);
+    return res.status(500).json({ error: 'Authentication failed' });
   }
 }
 
-/**
- * Role-based authorization middleware
- */
-export function requireRole(...allowedRoles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+export async function requireRole(roles: string[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
+      return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        error: "Insufficient permissions",
-        details: `Required roles: ${allowedRoles.join(', ')}, your role: ${req.user.role}`
-      });
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
     next();
   };
 }
 
-/**
- * Resource ownership validation middleware
- * Ensures users can only access their own resources
- */
-export function requireResourceOwnership(req: Request, res: Response, next: NextFunction) {
-  const userId = req.params.userId || req.query.userId as string;
-  
+export async function requireResourceOwnership(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user) {
-    return res.status(401).json({ error: "Authentication required" });
+    return res.status(401).json({ error: 'Authentication required' });
   }
 
-  // Admin can access any resource
-  if (req.user.role === 'admin') {
-    return next();
-  }
-
-  // Users can only access their own resources
-  if (userId && userId !== req.user.id) {
-    return res.status(403).json({ 
-      error: "Access denied",
-      details: "You can only access your own resources"
-    });
+  // Check if the user owns the resource being accessed
+  const resourceUserId = req.params.userId || req.body.userId;
+  
+  if (resourceUserId && resourceUserId !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied: You can only access your own resources' });
   }
 
   next();
 }
 
-/**
- * Optional authentication middleware - doesn't fail if no auth provided
- */
-export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
+export async function optionalAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.query.userId as string || req.headers['x-user-id'] as string;
+    const authHeader = req.headers.authorization;
     
-    if (userId) {
-      const user = await storage.getUser(userId);
-      if (user && user.isActive !== false) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const { data: { user }, error } = await supabaseServer.auth.getUser(token);
+
+      if (!error && user) {
+        const { data: profile } = await supabaseServer
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
         req.user = {
           id: user.id,
-          role: user.role,
-          email: user.email,
+          email: user.email || '',
+          role: profile?.role || 'blind_user',
+          ...profile
         };
       }
     }
-    
+
     next();
   } catch (error) {
-    console.error("Optional authentication error:", error);
-    // Don't fail on optional auth errors
-    next();
+    console.error('Optional auth error:', error);
+    next(); // Continue without authentication
   }
 }

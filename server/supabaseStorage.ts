@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabaseServer } from './lib/supabaseServer';
 import { 
   type User, 
   type NewUser, 
@@ -21,25 +22,8 @@ export class SupabaseStorage {
   private supabase: SupabaseClient;
 
   constructor() {
-    // Load environment variables with fallbacks for Vercel
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || 
-                       process.env.SUPABASE_URL || 
-                       process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                       process.env.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing Supabase environment variables:', {
-        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
-        SUPABASE_URL: process.env.SUPABASE_URL,
-        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'present' : 'missing',
-        SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'present' : 'missing'
-      });
-      throw new Error('Missing Supabase environment variables. Please check your Vercel environment variables.');
-    }
-
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    // Use the server client for all operations
+    this.supabase = supabaseServer;
   }
 
   // User management methods

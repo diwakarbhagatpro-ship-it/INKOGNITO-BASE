@@ -22,7 +22,8 @@ import {
   type UserRole 
 } from "@shared/schema";
 import { z } from "zod";
-import { requireAuth, requireRole, requireResourceOwnership, optionalAuth } from "./middleware/supabaseAuth";
+import { requireAuth, requireRole, requireResourceOwnership, optionalAuth } from "./middleware/auth";
+import { getNearbyVolunteers, createMatch, updateMatchStatus } from "./api/matchmaking";
 import { userCache, requestCache, invalidateCache } from "./middleware/cache";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -370,6 +371,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Volunteer Matching Routes
+  app.post("/api/matchmaking/nearby", requireAuth, getNearbyVolunteers);
+  app.post("/api/matchmaking/create", requireAuth, createMatch);
+  app.patch("/api/matchmaking/:matchId/status", requireAuth, updateMatchStatus);
+
   app.get("/api/requests/:id/matches", async (req, res) => {
     try {
       const request = await supabaseStorage.getScribeRequest(req.params.id);
