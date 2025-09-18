@@ -55,10 +55,12 @@ const AuthenticatedApp: React.FC = () => {
   }
 
   if (!user) {
+    const toggleForm = () => setShowSignUp(!showSignUp);
+
     return showSignUp ? (
-      <SignUpForm />
+      <SignUpForm onSignInClick={toggleForm} />
     ) : (
-      <SignInForm />
+      <SignInForm onSignUpClick={toggleForm} />
     );
   }
 

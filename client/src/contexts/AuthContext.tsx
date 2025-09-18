@@ -58,44 +58,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) {
-        tts.speakError(`Sign in failed: ${error.message}`);
-        return { error };
+      const data = await response.json();
+
+      if (!response.ok) {
+        tts.speakError(`Sign in failed: ${data.message}`);
+        return { error: { message: data.message } };
       }
+
+      // Manually update the session in the client
+      await supabase.auth.setSession(data.session);
 
       tts.speakSuccess('Successfully signed in!');
       return { error: null };
     } catch (error) {
       tts.speakError('An unexpected error occurred during sign in.');
-      return { error };
+      return { error: { message: 'An unexpected error occurred' } };
     }
   };
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: userData,
-        },
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, userData }),
       });
 
-      if (error) {
-        tts.speakError(`Sign up failed: ${error.message}`);
-        return { error };
+      const data = await response.json();
+
+      if (!response.ok) {
+        tts.speakError(`Sign up failed: ${data.message}`);
+        return { error: { message: data.message } };
       }
+      
+      // Manually update the session in the client
+      await supabase.auth.setSession(data.session);
 
       tts.speakSuccess('Account created successfully! Please check your email to verify your account.');
       return { error: null };
     } catch (error) {
       tts.speakError('An unexpected error occurred during sign up.');
-      return { error };
+      return { error: { message: 'An unexpected error occurred' } };
     }
   };
 

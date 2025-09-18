@@ -1,5 +1,7 @@
 import React from 'react';
 import { Logo } from './Logo';
+import PreloaderLogo from './preloader/logo.svg';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface PreloaderProps {
   isLoading: boolean;
@@ -84,75 +86,43 @@ export const DetailedPreloader: React.FC<PreloaderProps> = ({
   if (!isLoading) return null;
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-background to-muted z-50 flex items-center justify-center">
-      <div className="max-w-md w-full mx-4">
-        <div className="bg-card/80 backdrop-blur-sm rounded-lg p-8 shadow-lg border">
-          <div className="flex flex-col items-center space-y-6">
-            {/* Animated Logo with multiple rings */}
-            <div className="relative">
-              <div className="animate-spin">
-                <Logo size={64} showText={false} />
-              </div>
-              {/* Multiple pulsing rings */}
-              <div className="absolute inset-0 animate-ping">
-                <div className="w-16 h-16 border border-primary/20 rounded-full"></div>
-              </div>
-              <div className="absolute inset-0 animate-ping" style={{ animationDelay: '0.5s' }}>
-                <div className="w-20 h-20 border border-primary/10 rounded-full"></div>
-              </div>
-            </div>
-
-            {/* App Title */}
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl font-bold text-foreground">
-                InscribeMate
-              </h1>
-              <p className="text-muted-foreground">
-                Accessibility-First Scribe Platform
-              </p>
-            </div>
-
-            {/* Loading Message */}
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground animate-pulse">
-                {message}
-              </p>
-            </div>
-
-            {/* Animated Progress Bar */}
-            <div className="w-full space-y-2">
-              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full animate-pulse"></div>
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Loading...</span>
-                <span>Please wait</span>
-              </div>
-            </div>
-
-            {/* Feature highlights */}
-            <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span>Smart Matching</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span>Real-time Updates</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                <span>AI Assistant</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                <span>Accessibility</span>
-              </div>
-            </div>
+    <AnimatePresence>
+      {isLoading && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background text-foreground"
+        >
+          <div className="relative flex items-center justify-center w-48 h-48">
+            <motion.div
+              initial={{ scale: 0.9, rotate: 0 }}
+              animate={{ scale: 1, rotate: 360 }}
+              transition={{
+                repeat: Infinity,
+                duration: 10,
+                ease: 'linear',
+              }}
+            >
+              <img src={PreloaderLogo} alt="Loading..." style={{ width: '128px', height: '128px' }} />
+            </motion.div>
           </div>
-        </div>
-      </div>
-    </div>
+          
+          {message && (
+            <div className="mt-8 text-center">
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="text-lg font-medium text-muted-foreground"
+              >
+                {message}
+              </motion.p>
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

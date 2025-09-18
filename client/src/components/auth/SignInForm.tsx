@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useTTS } from '@/lib/tts';
 
-export const SignInForm: React.FC = () => {
+export const SignInForm: React.FC<{ onSignUpClick: () => void }> = ({ onSignUpClick }) => {
   const { signIn, loading } = useAuth();
   const { speak, speakError } = useTTS();
   const [formData, setFormData] = useState({
@@ -162,7 +162,10 @@ export const SignInForm: React.FC = () => {
               <Button
                 variant="link"
                 className="p-0 h-auto font-normal"
-                onClick={() => speak('Sign up link. Press Enter to create a new account.')}
+                onClick={() => {
+                  onSignUpClick();
+                  speak('Sign up link. Press Enter to create a new account.');
+                }}
               >
                 Sign up here
               </Button>

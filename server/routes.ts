@@ -22,8 +22,64 @@ import {
   type UserRole 
 } from "@shared/schema";
 import { z } from "zod";
+import { supabaseAdmin } from "./supabase";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth routes
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { email, password, userData } = req.body;
+      const { data, error } = await supabaseAdmin.auth.signUp({
+        email,
+        password,
+        options: {
+          data: userData,
+        },
+      });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+      
+      if (data.user) {
+        // Sign in the user to get a session
+        const { data: signInData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) {
+          return res.status(400).json({ message: signInError.message });
+        }
+        
+        return res.status(200).json({ session: signInData.session });
+      }
+      
+      res.status(200).json({ message: "Signup successful, please verify your email." });
+
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/auth/signin", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      res.status(200).json({ session: data.session });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User Management Routes
   app.get("/api/users/me", async (req, res) => {
     try {

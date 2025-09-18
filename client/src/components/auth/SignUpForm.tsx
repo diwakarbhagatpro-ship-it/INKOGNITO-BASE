@@ -10,7 +10,7 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useTTS } from '@/lib/tts';
 import { useGeolocation } from '@/lib/geolocation';
 
-export const SignUpForm: React.FC = () => {
+export const SignUpForm: React.FC<{ onSignInClick: () => void }> = ({ onSignInClick }) => {
   const { signUp, loading } = useAuth();
   const { speak, speakError, speakSuccess } = useTTS();
   const { getCurrentPosition, isSupported } = useGeolocation();
@@ -324,7 +324,10 @@ export const SignUpForm: React.FC = () => {
               <Button
                 variant="link"
                 className="p-0 h-auto font-normal"
-                onClick={() => speak('Sign in link. Press Enter to sign in to your existing account.')}
+                onClick={() => {
+                  onSignInClick();
+                  speak('Sign in link. Press Enter to sign in to your existing account.');
+                }}
               >
                 Sign in here
               </Button>
