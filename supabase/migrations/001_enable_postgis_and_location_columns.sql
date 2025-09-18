@@ -1,17 +1,5 @@
--- Enable PostGIS extension for geospatial operations
-CREATE EXTENSION IF NOT EXISTS postgis;
-
--- Add location_point column to users table for PostGIS geography
-ALTER TABLE users 
-ADD COLUMN IF NOT EXISTS location_point geography(Point, 4326);
-
--- Add location_point column to scribe_requests table for PostGIS geography
-ALTER TABLE scribe_requests 
-ADD COLUMN IF NOT EXISTS location_point geography(Point, 4326);
-
--- Add matched_volunteer_id column to scribe_requests table
-ALTER TABLE scribe_requests 
-ADD COLUMN IF NOT EXISTS matched_volunteer_id UUID REFERENCES users(id);
+-- This migration is now handled in 000_initial_schema.sql
+-- PostGIS and location columns are created in the initial schema
 
 -- Create index on location_point for better performance
 CREATE INDEX IF NOT EXISTS idx_users_location_point ON users USING GIST (location_point);

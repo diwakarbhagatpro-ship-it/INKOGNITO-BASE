@@ -194,7 +194,7 @@ Format as JSON array with volunteer, reason, and score fields.`;
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
       
-      return response.text().split('\n').filter(tip => tip.trim().length > 0);
+      return response.text().split('\n').filter((tip: string) => tip.trim().length > 0);
     } catch (error) {
       console.error('Gemini tips error:', error);
       return this.getMockAccessibilityTips(userRole);

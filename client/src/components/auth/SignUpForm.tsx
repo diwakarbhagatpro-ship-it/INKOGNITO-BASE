@@ -322,7 +322,7 @@ export const SignUpForm: React.FC = () => {
             <p className="text-sm text-muted-foreground">
               Already have an account?{' '}
               <Button
-                variant="link"
+                variant="ghost"
                 className="p-0 h-auto font-normal"
                 onClick={() => speak('Sign in link. Press Enter to sign in to your existing account.')}
               >

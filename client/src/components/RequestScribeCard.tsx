@@ -15,13 +15,13 @@ import { cn } from '@/lib/utils';
 import { useTTS } from '@/lib/tts';
 import { useGeolocation } from '@/lib/geolocation';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 interface VolunteerMatch {
-  volunteer_id: string;
-  volunteer_name: string;
-  volunteer_email: string;
-  volunteer_phone: string;
+  id: string;
+  name: string;
+  email: string;
+  phone_number?: string;
   distance_km: number;
   reliability_score: number;
   languages: string[];
@@ -120,59 +120,34 @@ export const RequestScribeCard: React.FC = () => {
     setSuccess(null);
 
     try {
-      // Create the request
-      const { data: request, error: requestError } = await supabase
-        .from('scribe_requests')
-        .insert({
-          user_id: user.id,
-          title: formData.title,
-          description: formData.description,
-          exam_type: formData.examType,
-          subject: formData.subject,
-          scheduled_date: formData.scheduledDate.toISOString(),
-          duration: formData.duration,
-          location: location,
-          urgency: formData.urgency,
-          special_requirements: formData.specialRequirements,
-          estimated_difficulty: formData.estimatedDifficulty,
-          status: 'pending',
-          language: 'en' // Default language, can be made dynamic
-        })
-        .select()
-        .single();
-
-      if (requestError) {
-        throw requestError;
-      }
+      // Create the request using API service
+      const request = await api.createScribeRequest({
+        title: formData.title,
+        description: formData.description,
+        exam_type: formData.examType,
+        subject: formData.subject,
+        scheduled_date: formData.scheduledDate.toISOString(),
+        duration: formData.duration,
+        location: location,
+        urgency: formData.urgency,
+        special_requirements: formData.specialRequirements,
+        estimated_difficulty: formData.estimatedDifficulty,
+        status: 'pending'
+      });
 
       speak('Request created successfully. Finding nearest volunteer...');
       setIsMatching(true);
 
-      // Call the matching function
-      const { data: matchResult, error: matchError } = await supabase.functions.invoke('matchVolunteer', {
-        body: {
-          requestId: request.id,
-          userId: user.id,
-          location: {
-            lat: location.lat,
-            lng: location.lng
-          },
-          scheduledDate: formData.scheduledDate.toISOString(),
-          maxDistanceKm: 50
-        }
-      });
+      // Find nearby volunteers
+      const nearbyVolunteers = await api.findNearbyVolunteers(location, 50);
 
-      if (matchError) {
-        throw matchError;
-      }
-
-      if (matchResult.matched) {
-        setVolunteerMatch(matchResult.volunteer);
-        setBackupVolunteers(matchResult.backup_volunteers || []);
-        speakSuccess(`Found volunteer: ${matchResult.volunteer.volunteer_name} (${matchResult.volunteer.distance_km}km away)`);
-        setSuccess(`Great! We found a volunteer: ${matchResult.volunteer.volunteer_name} (${matchResult.volunteer.distance_km}km away)`);
+      if (nearbyVolunteers && nearbyVolunteers.length > 0) {
+        const primaryVolunteer = nearbyVolunteers[0];
+        setVolunteerMatch(primaryVolunteer);
+        setBackupVolunteers(nearbyVolunteers.slice(1));
+        speakSuccess(`Found volunteer: ${primaryVolunteer.name} (${primaryVolunteer.distance_km}km away)`);
+        setSuccess(`Great! We found a volunteer: ${primaryVolunteer.name} (${primaryVolunteer.distance_km}km away)`);
       } else {
-        setBackupVolunteers(matchResult.backup_volunteers || []);
         speak('No volunteers found nearby. We have some backup options for you.');
         setError('No volunteers available nearby. Check backup options below.');
       }
@@ -437,8 +412,8 @@ export const RequestScribeCard: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-lg">{volunteerMatch.volunteer_name}</h3>
-                  <p className="text-sm text-muted-foreground">{volunteerMatch.volunteer_email}</p>
+                  <h3 className="font-semibold text-lg">{volunteerMatch.name}</h3>
+                  <p className="text-sm text-muted-foreground">{volunteerMatch.email}</p>
                 </div>
                 <Badge variant="default" className="bg-green-600">
                   {volunteerMatch.distance_km}km away
@@ -452,13 +427,13 @@ export const RequestScribeCard: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  <span>Languages: {volunteerMatch.languages.join(', ')}</span>
+                  <span>Languages: {volunteerMatch.languages?.join(', ') || 'English'}</span>
                 </div>
               </div>
 
-              {volunteerMatch.volunteer_phone && (
+              {volunteerMatch.phone_number && (
                 <div className="flex items-center gap-2 text-sm">
-                  <span>Phone: {volunteerMatch.volunteer_phone}</span>
+                  <span>Phone: {volunteerMatch.phone_number}</span>
                 </div>
               )}
             </div>
@@ -478,9 +453,9 @@ export const RequestScribeCard: React.FC = () => {
           <CardContent>
             <div className="space-y-3">
               {backupVolunteers.map((volunteer, index) => (
-                <div key={volunteer.volunteer_id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div key={volunteer.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
-                    <h4 className="font-medium">{volunteer.volunteer_name}</h4>
+                    <h4 className="font-medium">{volunteer.name}</h4>
                     <p className="text-sm text-muted-foreground">
                       {volunteer.distance_km}km away • Rating: {volunteer.reliability_score}/5.0
                     </p>

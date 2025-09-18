@@ -15,7 +15,7 @@ BEGIN
   IF NEW.status = 'pending' AND (OLD IS NULL OR OLD.status != 'pending') THEN
     
     -- Get the webhook URL for the auto-match function
-    webhook_url := 'https://your-project-id.supabase.co/functions/v1/auto-match';
+    webhook_url := 'https://aqvpvtqywojhybhjogiv.supabase.co/functions/v1/matchVolunteer';
     
     -- Prepare payload
     payload := jsonb_build_object(
@@ -74,7 +74,7 @@ BEGIN
   -- Only process status changes
   IF OLD.status IS DISTINCT FROM NEW.status THEN
     
-    webhook_url := 'https://your-project-id.supabase.co/functions/v1/auto-match';
+    webhook_url := 'https://aqvpvtqywojhybhjogiv.supabase.co/functions/v1/matchVolunteer';
     
     payload := jsonb_build_object(
       'record', to_jsonb(NEW),

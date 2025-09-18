@@ -67,6 +67,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { error };
       }
 
+      // Create or update user profile in our database
+      if (data.user) {
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+          if (profileError && profileError.code === 'PGRST116') {
+            // User doesn't exist in our database, create them
+            const { error: createError } = await supabase
+              .from('users')
+              .insert({
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || data.user.email,
+                role: data.user.user_metadata?.role || 'blind_user',
+                preferences: {
+                  ttsEnabled: true,
+                  highContrast: false,
+                  fontSize: 'medium',
+                }
+              });
+
+            if (createError) {
+              console.error('Error creating user profile:', createError);
+            }
+          }
+        } catch (profileError) {
+          console.error('Error handling user profile:', profileError);
+        }
+      }
+
       tts.speakSuccess('Successfully signed in!');
       return { error: null };
     } catch (error) {
@@ -88,6 +122,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error) {
         tts.speakError(`Sign up failed: ${error.message}`);
         return { error };
+      }
+
+      // Create user profile in our database
+      if (data.user) {
+        try {
+          const { error: createError } = await supabase
+            .from('users')
+            .insert({
+              id: data.user.id,
+              email: data.user.email,
+              name: userData.name,
+              role: userData.role || 'blind_user',
+              phone_number: userData.phoneNumber,
+              location: userData.location,
+              languages: userData.languages || [],
+              preferences: userData.preferences || {
+                ttsEnabled: true,
+                highContrast: false,
+                fontSize: 'medium',
+              }
+            });
+
+          if (createError) {
+            console.error('Error creating user profile:', createError);
+            tts.speakError('Account created but profile setup failed. Please contact support.');
+          }
+        } catch (profileError) {
+          console.error('Error creating user profile:', profileError);
+        }
       }
 
       tts.speakSuccess('Account created successfully! Please check your email to verify your account.');

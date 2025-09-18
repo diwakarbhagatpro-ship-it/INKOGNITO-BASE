@@ -2,18 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { z } from "zod";
 
-// Extend Express Request type to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        role: string;
-        email: string;
-      };
-    }
-  }
-}
+// User type is already declared in supabaseAuth.ts
 
 // Basic session validation schema
 const sessionValidationSchema = z.object({

@@ -160,7 +160,7 @@ export const SignInForm: React.FC = () => {
             <p className="text-sm text-muted-foreground">
               Don't have an account?{' '}
               <Button
-                variant="link"
+                variant="ghost"
                 className="p-0 h-auto font-normal"
                 onClick={() => speak('Sign up link. Press Enter to create a new account.')}
               >

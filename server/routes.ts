@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { supabaseStorage } from "./supabaseStorage";
 import { 
   insertUserSchema, 
   insertScribeRequestSchema, 
@@ -22,26 +22,40 @@ import {
   type UserRole 
 } from "@shared/schema";
 import { z } from "zod";
+import { requireAuth, requireRole, requireResourceOwnership, optionalAuth } from "./middleware/supabaseAuth";
+import { userCache, requestCache, invalidateCache } from "./middleware/cache";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health Check and Monitoring Routes
+  app.get("/health", async (req, res) => {
+    const { getHealthStatus, getMemoryUsage } = await import('./middleware/performance');
+    const health = getHealthStatus();
+    const memory = getMemoryUsage();
+    
+    res.json({
+      status: health.healthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      uptime: health.uptime,
+      memory,
+      performance: health
+    });
+  });
+
+  app.get("/metrics", async (req, res) => {
+    const { getPerformanceMetrics } = await import('./middleware/performance');
+    const { getCacheStats } = await import('./middleware/cache');
+    
+    res.json({
+      performance: getPerformanceMetrics(),
+      cache: getCacheStats(),
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // User Management Routes
-  app.get("/api/users/me", async (req, res) => {
+  app.get("/api/users/me", requireAuth, async (req, res) => {
     try {
-      const queryValidation = getUsersQuerySchema.safeParse(req.query);
-      if (!queryValidation.success) {
-        return res.status(400).json({ 
-          error: "Invalid query parameters", 
-          details: queryValidation.error.errors 
-        });
-      }
-      
-      // TODO: Get from session/auth
-      const userId = queryValidation.data.userId;
-      if (!userId) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-      
-      const user = await storage.getUser(userId);
+      const user = await supabaseStorage.getUser(req.user!.id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -56,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/users", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(userData);
+      const user = await supabaseStorage.createUser(userData);
       res.status(201).json(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -67,9 +81,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/volunteers", async (req, res) => {
+  app.get("/api/users/volunteers", requireAuth, userCache, async (req, res) => {
     try {
-      const volunteers = await storage.getAvailableVolunteers();
+      const volunteers = await supabaseStorage.getAvailableVolunteers();
       res.json(volunteers);
     } catch (error) {
       console.error("Error getting volunteers:", error);
@@ -78,23 +92,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Scribe Request Routes
-  app.get("/api/requests", async (req, res) => {
+  app.get("/api/requests", requestCache, async (req, res) => {
     try {
       const userId = req.query.userId as string;
       const status = req.query.status as string;
       
       if (userId) {
-        const requests = await storage.getScribeRequestsByUser(userId);
+        const requests = await supabaseStorage.getScribeRequestsByUser(userId);
         return res.json(requests);
       }
       
       if (status) {
-        const requests = await storage.getScribeRequestsByStatus(status as any);
+        const requests = await supabaseStorage.getScribeRequestsByStatus(status as any);
         return res.json(requests);
       }
       
       // Get all pending requests for volunteers to see
-      const requests = await storage.getScribeRequestsByStatus("pending");
+      const requests = await supabaseStorage.getScribeRequestsByStatus("pending");
       res.json(requests);
     } catch (error) {
       console.error("Error getting requests:", error);
@@ -104,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/requests/:id", async (req, res) => {
     try {
-      const request = await storage.getScribeRequest(req.params.id);
+      const request = await supabaseStorage.getScribeRequest(req.params.id);
       if (!request) {
         return res.status(404).json({ error: "Request not found" });
       }
@@ -115,10 +129,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/requests", async (req, res) => {
+  app.post("/api/requests", invalidateCache, async (req, res) => {
     try {
       const requestData = insertScribeRequestSchema.parse(req.body);
-      const request = await storage.createScribeRequest(requestData);
+      const request = await supabaseStorage.createScribeRequest(requestData);
       res.status(201).json(request);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -141,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Business logic validation for status transitions
       if (bodyValidation.data.status) {
-        const currentRequest = await storage.getScribeRequest(req.params.id);
+        const currentRequest = await supabaseStorage.getScribeRequest(req.params.id);
         if (!currentRequest) {
           return res.status(404).json({ error: "Request not found" });
         }
@@ -159,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.scheduledDate = new Date(bodyValidation.data.scheduledDate);
       }
       
-      const request = await storage.updateScribeRequest(req.params.id, updateData);
+      const request = await supabaseStorage.updateScribeRequest(req.params.id, updateData);
       res.json(request);
     } catch (error) {
       console.error("Error updating request:", error);
@@ -169,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/requests/:id", async (req, res) => {
     try {
-      await storage.deleteScribeRequest(req.params.id);
+      await supabaseStorage.deleteScribeRequest(req.params.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting request:", error);
@@ -180,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Volunteer Application Routes
   app.get("/api/requests/:id/applications", async (req, res) => {
     try {
-      const applications = await storage.getApplicationsForRequest(req.params.id);
+      const applications = await supabaseStorage.getApplicationsForRequest(req.params.id);
       res.json(applications);
     } catch (error) {
       console.error("Error getting applications:", error);
@@ -196,12 +210,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Calculate match score
-      const matchScore = await storage.calculateMatchScore(
+      const matchScore = await supabaseStorage.calculateMatchScore(
         req.params.id, 
         applicationData.volunteerId
       );
       
-      const application = await storage.createVolunteerApplication({
+      const application = await supabaseStorage.createVolunteerApplication({
         ...applicationData,
         matchScore: matchScore.toString(),
       });
@@ -231,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Business logic validation for application status transitions
-      const currentApplication = await storage.getApplicationByIdForValidation(req.params.id);
+      const currentApplication = await supabaseStorage.getApplicationByIdForValidation(req.params.id);
       if (!currentApplication) {
         return res.status(404).json({ error: "Application not found" });
       }
@@ -242,16 +256,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const application = await storage.updateApplicationStatus(req.params.id, bodyValidation.data.status);
+      const application = await supabaseStorage.updateApplicationStatus(req.params.id, bodyValidation.data.status);
       
       // If application is accepted, update request status to matched
       if (bodyValidation.data.status === "accepted") {
-        const request = await storage.getScribeRequest(application.requestId);
+        const request = await supabaseStorage.getScribeRequest(application.requestId);
         if (request) {
-          await storage.updateScribeRequest(application.requestId, { status: "matched" });
+          await supabaseStorage.updateScribeRequest(application.requestId, { status: "matched" });
           
           // Create scribe session
-          await storage.createScribeSession({
+          await supabaseStorage.createScribeSession({
             requestId: application.requestId,
             userId: request.userId,
             volunteerId: application.volunteerId,
@@ -274,12 +288,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const volunteerId = req.query.volunteerId as string;
       
       if (userId) {
-        const sessions = await storage.getSessionsByUser(userId);
+        const sessions = await supabaseStorage.getSessionsByUser(userId);
         return res.json(sessions);
       }
       
       if (volunteerId) {
-        const sessions = await storage.getSessionsByVolunteer(volunteerId);
+        const sessions = await supabaseStorage.getSessionsByVolunteer(volunteerId);
         return res.json(sessions);
       }
       
@@ -292,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/sessions/:id", async (req, res) => {
     try {
-      const session = await storage.getScribeSession(req.params.id);
+      const session = await supabaseStorage.getScribeSession(req.params.id);
       if (!session) {
         return res.status(404).json({ error: "Session not found" });
       }
@@ -315,7 +329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Business logic validation for session status transitions
       if (bodyValidation.data.status) {
-        const currentSession = await storage.getScribeSession(req.params.id);
+        const currentSession = await supabaseStorage.getScribeSession(req.params.id);
         if (!currentSession) {
           return res.status(404).json({ error: "Session not found" });
         }
@@ -336,7 +350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.endTime = new Date(bodyValidation.data.endTime);
       }
       
-      const session = await storage.updateScribeSession(req.params.id, updateData);
+      const session = await supabaseStorage.updateScribeSession(req.params.id, updateData);
       res.json(session);
     } catch (error) {
       console.error("Error updating session:", error);
@@ -347,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics and Dashboard Routes
   app.get("/api/analytics", async (req, res) => {
     try {
-      const analytics = await storage.getRequestAnalytics();
+      const analytics = await supabaseStorage.getRequestAnalytics();
       res.json(analytics);
     } catch (error) {
       console.error("Error getting analytics:", error);
@@ -358,7 +372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Volunteer Matching Routes
   app.get("/api/requests/:id/matches", async (req, res) => {
     try {
-      const request = await storage.getScribeRequest(req.params.id);
+      const request = await supabaseStorage.getScribeRequest(req.params.id);
       if (!request) {
         return res.status(404).json({ error: "Request not found" });
       }
@@ -366,12 +380,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const radiusKm = parseFloat(req.query.radius as string) || 25;
       const location = request.location as { lat: number; lng: number };
       
-      const nearbyVolunteers = await storage.findNearbyVolunteers(location, radiusKm);
+      const nearbyVolunteers = await supabaseStorage.findNearbyVolunteers(location, radiusKm);
       
       // Calculate match scores for each volunteer
       const matchesWithScores = await Promise.all(
         nearbyVolunteers.map(async (volunteer) => {
-          const score = await storage.calculateMatchScore(req.params.id, volunteer.id);
+          const score = await supabaseStorage.calculateMatchScore(req.params.id, volunteer.id);
           return {
             volunteer,
             matchScore: score,
@@ -399,7 +413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "userId required" });
       }
       
-      const history = await storage.getChatHistory(userId, limit);
+      const history = await supabaseStorage.getChatHistory(userId, limit);
       res.json(history);
     } catch (error) {
       console.error("Error getting chat history:", error);
@@ -418,7 +432,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // TODO: Integrate with Gemini AI for actual response generation
       const response = `Thank you for your question: "${message}". This is a placeholder response. INSEE AI will provide contextual assistance for accessibility needs and scribe session support.`;
       
-      const chatEntry = await storage.createChatEntry({
+      const chatEntry = await supabaseStorage.createChatEntry({
         userId,
         message,
         response,

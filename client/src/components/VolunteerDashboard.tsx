@@ -152,7 +152,7 @@ export const VolunteerDashboard: React.FC = () => {
         </Card>
       ) : (
         <div className="space-y-4">
-          {matches.map((match: MatchWithRequest) => (
+          {matches.map((match: any) => (
             <Card key={match.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
