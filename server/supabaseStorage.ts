@@ -25,6 +25,11 @@ export class SupabaseStorage {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing Supabase environment variables:', {
+        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
+        SUPABASE_URL: process.env.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'present' : 'missing'
+      });
       throw new Error('Missing Supabase environment variables');
     }
 

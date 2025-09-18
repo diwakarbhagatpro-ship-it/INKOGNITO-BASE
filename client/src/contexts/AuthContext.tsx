@@ -57,53 +57,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) {
-        tts.speakError(`Sign in failed: ${error.message}`);
-        return { error };
+      const result = await response.json();
+
+      if (!response.ok) {
+        tts.speakError(`Sign in failed: ${result.error || 'Unknown error'}`);
+        return { error: new Error(result.error || 'Sign in failed') };
       }
 
-      // Create or update user profile in our database
-      if (data.user) {
-        try {
-          const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-
-          if (profileError && profileError.code === 'PGRST116') {
-            // User doesn't exist in our database, create them
-            const { error: createError } = await supabase
-              .from('users')
-              .insert({
-                id: data.user.id,
-                email: data.user.email,
-                name: data.user.user_metadata?.name || data.user.email,
-                role: data.user.user_metadata?.role || 'blind_user',
-                preferences: {
-                  ttsEnabled: true,
-                  highContrast: false,
-                  fontSize: 'medium',
-                }
-              });
-
-            if (createError) {
-              console.error('Error creating user profile:', createError);
-            }
-          }
-        } catch (profileError) {
-          console.error('Error handling user profile:', profileError);
-        }
+      // Set the session in Supabase client for consistency
+      if (result.session) {
+        await supabase.auth.setSession(result.session);
       }
 
       tts.speakSuccess('Successfully signed in!');
       return { error: null };
-    } catch (error) {
+    } catch (error: any) {
       tts.speakError('An unexpected error occurred during sign in.');
       return { error };
     }
@@ -111,51 +87,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signUp = async (email: string, password: string, userData: any) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: userData,
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ email, password, userData }),
       });
 
-      if (error) {
-        tts.speakError(`Sign up failed: ${error.message}`);
-        return { error };
+      const result = await response.json();
+
+      if (!response.ok) {
+        tts.speakError(`Sign up failed: ${result.error || 'Unknown error'}`);
+        return { error: new Error(result.error || 'Sign up failed') };
       }
 
-      // Create user profile in our database
-      if (data.user) {
-        try {
-          const { error: createError } = await supabase
-            .from('users')
-            .insert({
-              id: data.user.id,
-              email: data.user.email,
-              name: userData.name,
-              role: userData.role || 'blind_user',
-              phone_number: userData.phoneNumber,
-              location: userData.location,
-              languages: userData.languages || [],
-              preferences: userData.preferences || {
-                ttsEnabled: true,
-                highContrast: false,
-                fontSize: 'medium',
-              }
-            });
-
-          if (createError) {
-            console.error('Error creating user profile:', createError);
-            tts.speakError('Account created but profile setup failed. Please contact support.');
-          }
-        } catch (profileError) {
-          console.error('Error creating user profile:', profileError);
-        }
+      // Set the session in Supabase client for consistency
+      if (result.session) {
+        await supabase.auth.setSession(result.session);
       }
 
-      tts.speakSuccess('Account created successfully! Please check your email to verify your account.');
+      tts.speakSuccess('Account created successfully!');
       return { error: null };
-    } catch (error) {
+    } catch (error: any) {
       tts.speakError('An unexpected error occurred during sign up.');
       return { error };
     }
@@ -163,11 +117,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        tts.speakError(`Sign out failed: ${error.message}`);
-        throw error;
+      const response = await fetch('/api/auth/signout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        tts.speakError(`Sign out failed: ${result.error || 'Unknown error'}`);
+        throw new Error(result.error || 'Sign out failed');
       }
+
+      // Also sign out from Supabase client
+      await supabase.auth.signOut();
       tts.speak('You have been signed out.');
     } catch (error) {
       tts.speakError('An unexpected error occurred during sign out.');

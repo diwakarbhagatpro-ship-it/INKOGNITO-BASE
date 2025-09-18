@@ -447,6 +447,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Authentication Routes
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { email, password, userData } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      // Create user in Supabase Auth
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        user_metadata: userData || {}
+      });
+
+      if (authError) {
+        console.error("Auth signup error:", authError);
+        return res.status(400).json({ error: authError.message });
+      }
+
+      if (!authData.user) {
+        return res.status(400).json({ error: "Failed to create user" });
+      }
+
+      // Create user profile in our database
+      const userProfile = {
+        id: authData.user.id,
+        email: authData.user.email!,
+        name: userData?.name || authData.user.email!,
+        role: userData?.role || 'blind_user',
+        phone_number: userData?.phoneNumber,
+        location: userData?.location,
+        languages: userData?.languages || [],
+        preferences: userData?.preferences || {
+          ttsEnabled: true,
+          highContrast: false,
+          fontSize: 'medium',
+        }
+      };
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('users')
+        .insert(userProfile)
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
+        // Don't fail the signup if profile creation fails
+      }
+
+      res.status(201).json({
+        user: authData.user,
+        profile: profileData,
+        message: "User created successfully"
+      });
+
+    } catch (error) {
+      console.error("Signup error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/signin", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      // Sign in with Supabase Auth
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const { data: authData, error: authError } = await supabase.auth.admin.signInWithPassword({
+        email,
+        password
+      });
+
+      if (authError) {
+        console.error("Auth signin error:", authError);
+        return res.status(401).json({ error: authError.message });
+      }
+
+      if (!authData.user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Get user profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError && profileError.code === 'PGRST116') {
+        // User doesn't exist in our database, create them
+        const { error: createError } = await supabase
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email: authData.user.email,
+            name: authData.user.user_metadata?.name || authData.user.email,
+            role: authData.user.user_metadata?.role || 'blind_user',
+            preferences: {
+              ttsEnabled: true,
+              highContrast: false,
+              fontSize: 'medium',
+            }
+          });
+        
+        if (createError) {
+          console.error("Error creating user profile:", createError);
+        }
+      }
+
+      res.json({
+        user: authData.user,
+        session: authData.session,
+        profile: profileData,
+        message: "Sign in successful"
+      });
+
+    } catch (error) {
+      console.error("Signin error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/signout", async (req, res) => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const { error } = await supabase.auth.admin.signOut();
+      
+      if (error) {
+        console.error("Signout error:", error);
+        return res.status(400).json({ error: error.message });
+      }
+
+      res.json({ message: "Sign out successful" });
+
+    } catch (error) {
+      console.error("Signout error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Health check route
   app.get("/api/health", (req, res) => {
     res.json({ 
