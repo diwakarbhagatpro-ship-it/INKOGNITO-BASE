@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { storage } from "../storage";
-import { z } from "zod";
+import { supabaseServer } from "../lib/supabaseServer";
 
 // Extend Express Request type to include user
 declare global {
@@ -15,130 +14,97 @@ declare global {
   }
 }
 
-// Basic session validation schema
-const sessionValidationSchema = z.object({
-  userId: z.string().uuid(),
-  role: z.enum(['blind_user', 'volunteer', 'admin']).optional(),
-});
-
 /**
- * Simple authentication middleware for API routes
- * In production, this should be replaced with proper session/JWT authentication
+ * JWT-based authentication middleware for API routes using Supabase
  */
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    // Check for userId in query parameters or headers
-    const userId = req.query.userId as string || req.headers['x-user-id'] as string;
+    const authHeader = req.headers.authorization;
     
-    if (!userId) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ 
         error: "Authentication required",
-        details: "userId must be provided in query parameters or x-user-id header"
+        details: "Bearer token must be provided in Authorization header"
       });
     }
 
-    // Validate userId format
-    const validation = sessionValidationSchema.safeParse({ userId });
-    if (!validation.success) {
+    // Extract the JWT token
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the JWT token with Supabase
+    const { data: { user }, error } = await supabaseServer.auth.getUser(token);
+    
+    if (error || !user) {
       return res.status(401).json({ 
-        error: "Invalid authentication format",
-        details: validation.error.errors
+        error: "Invalid or expired token",
+        details: error?.message || "Authentication failed"
       });
     }
 
-    // Check if user exists and is active
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
+    // Get additional user data from the database
+    const { data: userData, error: userDataError } = await supabaseServer
+      .from('users')
+      .select('id, role, email, is_active')
+      .eq('id', user.id)
+      .single();
+      
+    if (userDataError || !userData) {
+      return res.status(401).json({
+        error: "User not found",
+        details: "User exists in auth but not in database"
+      });
     }
-
-    if (user.isActive === false) {
-      return res.status(401).json({ error: "User account is inactive" });
+    
+    // Check if user is active
+    if (userData.is_active === false) {
+      return res.status(403).json({ 
+        error: "Account inactive",
+        details: "Your account has been deactivated"
+      });
     }
-
-    // Attach user to request
+    
+    // Set user data on request object
     req.user = {
-      id: user.id,
-      role: user.role,
-      email: user.email,
+      id: userData.id,
+      role: userData.role,
+      email: userData.email
     };
-
+    
+    // Continue to the next middleware/route handler
     next();
+    
   } catch (error) {
-    console.error("Authentication error:", error);
-    res.status(500).json({ error: "Internal authentication error" });
+    console.error('Auth middleware error:', error);
+    return res.status(500).json({
+      error: "Authentication error",
+      details: "An error occurred during authentication"
+    });
   }
 }
 
 /**
  * Role-based authorization middleware
+ * @param allowedRoles - Array of roles that are allowed to access the route
  */
-export function requireRole(...allowedRoles: string[]) {
+export function requireRole(allowedRoles: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
+    // First ensure the user is authenticated
     if (!req.user) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        error: "Insufficient permissions",
-        details: `Required roles: ${allowedRoles.join(', ')}, your role: ${req.user.role}`
+      return res.status(401).json({
+        error: "Authentication required",
+        details: "You must be logged in to access this resource"
       });
     }
 
+    // Then check if the user has one of the allowed roles
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: "Insufficient permissions",
+        details: `This action requires one of these roles: ${allowedRoles.join(', ')}`
+      });
+    }
+
+    // User has an allowed role, proceed
     next();
   };
-}
-
-/**
- * Resource ownership validation middleware
- * Ensures users can only access their own resources
- */
-export function requireResourceOwnership(req: Request, res: Response, next: NextFunction) {
-  const userId = req.params.userId || req.query.userId as string;
-  
-  if (!req.user) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-
-  // Admin can access any resource
-  if (req.user.role === 'admin') {
-    return next();
-  }
-
-  // Users can only access their own resources
-  if (userId && userId !== req.user.id) {
-    return res.status(403).json({ 
-      error: "Access denied",
-      details: "You can only access your own resources"
-    });
-  }
-
-  next();
-}
-
-/**
- * Optional authentication middleware - doesn't fail if no auth provided
- */
-export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = req.query.userId as string || req.headers['x-user-id'] as string;
-    
-    if (userId) {
-      const user = await storage.getUser(userId);
-      if (user && user.isActive !== false) {
-        req.user = {
-          id: user.id,
-          role: user.role,
-          email: user.email,
-        };
-      }
-    }
-    
-    next();
-  } catch (error) {
-    console.error("Optional authentication error:", error);
-    // Don't fail on optional auth errors
-    next();
-  }
 }

@@ -23,8 +23,14 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { supabaseAdmin } from "./supabase";
+import { requireAuth, requireRole } from "./middleware/auth";
+import { getNearbyVolunteers, matchWithVolunteer } from "./api/matchmaking";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Matchmaking routes
+  app.get("/api/matchmaking/volunteers", requireAuth, getNearbyVolunteers);
+  app.post("/api/matchmaking/match", requireAuth, matchWithVolunteer);
+  
   // Auth routes
   app.post("/api/auth/signup", async (req, res) => {
     try {

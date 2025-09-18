@@ -1,0 +1,98 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Lint
+      run: npm run lint || echo "No linting configured"
+    
+    - name: Build
+      run: npm run build
+    
+    - name: Cache build
+      uses: actions/cache@v3
+      with:
+        path: |
+          dist
+          client/dist
+        key: ${{ runner.os }}-build-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-build-
+
+  deploy-preview:
+    needs: build-and-test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Restore cached build
+      uses: actions/cache@v3
+      with:
+        path: |
+          dist
+          client/dist
+        key: ${{ runner.os }}-build-${{ github.sha }}
+    
+    - name: Deploy to Netlify (Preview)
+      uses: nwtgck/actions-netlify@v2
+      with:
+        publish-dir: './client/dist'
+        production-branch: main
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        deploy-message: "Deploy Preview from GitHub Actions"
+        enable-pull-request-comment: true
+        enable-commit-comment: false
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      timeout-minutes: 5
+
+  deploy-production:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Restore cached build
+      uses: actions/cache@v3
+      with:
+        path: |
+          dist
+          client/dist
+        key: ${{ runner.os }}-build-${{ github.sha }}
+    
+    - name: Deploy to Netlify (Production)
+      uses: nwtgck/actions-netlify@v2
+      with:
+        publish-dir: './client/dist'
+        production-branch: main
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        production-deploy: true
+        deploy-message: "Deploy Production from GitHub Actions"
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      timeout-minutes: 5

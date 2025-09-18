@@ -34,11 +34,31 @@ export const SignInForm: React.FC<{ onSignUpClick: () => void }> = ({ onSignUpCl
       const { error } = await signIn(formData.email, formData.password);
       
       if (error) {
-        setError(error.message);
-        speakError(error.message);
+        let errorMessage = error.message;
+        
+        // Handle specific error cases
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'Please check your email and click the confirmation link before signing in.';
+        } else if (error.message.includes('Too many requests')) {
+          errorMessage = 'Too many sign-in attempts. Please wait a moment and try again.';
+        } else if (error.message.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        }
+        
+        setError(errorMessage);
+        speakError(errorMessage);
       }
-    } catch (err) {
-      const errorMessage = 'An unexpected error occurred';
+    } catch (err: any) {
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (err.message?.includes('fetch')) {
+        errorMessage = 'Unable to connect to the server. Please check your internet connection.';
+      } else if (err.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      }
+      
       setError(errorMessage);
       speakError(errorMessage);
     } finally {
@@ -159,16 +179,15 @@ export const SignInForm: React.FC<{ onSignUpClick: () => void }> = ({ onSignUpCl
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               Don't have an account?{' '}
-              <Button
-                variant="link"
-                className="p-0 h-auto font-normal"
+              <button
+                className="p-0 h-auto font-normal text-primary underline-offset-4 hover:underline"
                 onClick={() => {
                   onSignUpClick();
                   speak('Sign up link. Press Enter to create a new account.');
                 }}
               >
                 Sign up here
-              </Button>
+              </button>
             </p>
           </div>
         </CardContent>

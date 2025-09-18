@@ -1,4 +1,7 @@
 // Text-to-Speech utility service
+// Note: This file no longer uses react-speech-kit due to dependency conflicts.
+// It relies on the browser's built-in SpeechSynthesis API.
+
 export class TTSService {
   private static instance: TTSService;
   private synth: SpeechSynthesis;
@@ -100,6 +103,10 @@ export class TTSService {
     return this.synth.paused;
   }
 
+  public getVoice(): SpeechSynthesisVoice | null {
+    return this.voice;
+  }
+
   // Utility method to speak UI elements
   public speakElement(element: HTMLElement, customText?: string) {
     const text = customText || this.extractTextFromElement(element);
@@ -144,8 +151,14 @@ export const tts = TTSService.getInstance();
 
 // React hook for TTS
 export const useTTS = () => {
+  // Note: We use the native Web Speech API for speech-to-text functionality.
+  // This hook will now primarily wrap our custom TTSService.
+  // For actual speech synthesis, we will continue to use the browser's built-in SpeechSynthesis API.
+  
   return {
-    speak: (text: string, options?: Parameters<typeof tts.speak>[1]) => tts.speak(text, options),
+    speak: (text: string, options?: Parameters<typeof tts.speak>[1]) => {
+      tts.speak(text, options);
+    },
     stop: () => tts.stop(),
     pause: () => tts.pause(),
     resume: () => tts.resume(),
@@ -156,5 +169,11 @@ export const useTTS = () => {
     speakError: (errorMessage: string) => tts.speakError(errorMessage),
     speakSuccess: (message: string) => tts.speakSuccess(message),
     speakNavigation: (pageName: string) => tts.speakNavigation(pageName),
+    getVoices: () => {
+      // This function will now return voices from our TTSService
+      const synth = window.speechSynthesis;
+      return synth.getVoices();
+    },
+    isSupported: () => 'speechSynthesis' in window,
   };
 };

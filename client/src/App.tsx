@@ -1,29 +1,39 @@
-import { useState, useEffect } from 'react';
-import { Switch, Route } from 'wouter';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { queryClient } from './lib/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import NotFound from '@/pages/not-found';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { SignInForm } from '@/components/auth/SignInForm';
-import { SignUpForm } from '@/components/auth/SignUpForm';
 import { tts } from '@/lib/tts';
-
-// Import our custom components
-import { AppSidebar } from '@/components/AppSidebar';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { LanguageSelector } from '@/components/LanguageSelector';
-import { UserDashboard } from '@/components/UserDashboard';
-import { RequestScribeCard } from '@/components/RequestScribeCard';
-import { InseeAssistant } from '@/components/InseeAssistant';
-import { Logo } from '@/components/Logo';
 import { DetailedPreloader } from '@/components/Preloader';
 import { useAppLoading } from '@/hooks/usePreloader';
+import { Logo } from '@/components/Logo';
+import { Route, Switch } from 'wouter';
+import { UserDashboard } from '@/components/UserDashboard';
+import { RequestScribeCard } from '@/components/RequestScribeCard';
+import { TTSTest } from '@/components/TTSTest';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { InseeAssistant } from '@/components/InseeAssistant';
 import { PreloaderDemo } from '@/components/PreloaderDemo';
+import NotFound from '@/pages/not-found';
+
+// Lazily loaded components
+const SignInForm = lazy(() => import('@/components/auth/SignInForm').then(module => ({ default: module.SignInForm })));
+const SignUpForm = lazy(() => import('@/components/auth/SignUpForm').then(module => ({ default: module.SignUpForm })));
+const AppSidebar = lazy(() => import('@/components/AppSidebar').then(module => ({ default: module.AppSidebar })));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="text-center space-y-4">
+      <Logo className="mx-auto h-16 w-16 animate-pulse" />
+      <p className="text-lg">Loading...</p>
+    </div>
+  </div>
+);
 
 // Authentication wrapper component
 const AuthenticatedApp: React.FC = () => {
@@ -98,6 +108,18 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
     return (
       <div className="p-6">
         <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-2">Settings</h1>
+          <p className="text-muted-foreground">
+            Customize your experience and preferences.
+          </p>
+        </div>
+        
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-4">Text-to-Speech Settings</h2>
+          <TTSTest />
+        </div>
+        
+        <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">Accessibility Settings</h1>
           <p className="text-muted-foreground">
             Customize your experience with accessibility and preference options.
@@ -151,7 +173,7 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
     );
   }
 
-  function Router() {
+  function AppRouter() {
     return (
       <Switch>
         <Route path="/" component={DashboardPage} />
@@ -169,7 +191,9 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
       <TooltipProvider>
         <SidebarProvider style={{ '--sidebar-width': '20rem', '--sidebar-width-icon': '4rem' } as React.CSSProperties}>
           <div className="flex h-screen w-full">
-            <AppSidebar userRole={userRole} />
+            <Suspense fallback={<LoadingFallback />}>
+              <AppSidebar userRole={userRole} />
+            </Suspense>
             <div className="flex flex-col flex-1">
               {/* Header */}
               <header 
@@ -183,8 +207,12 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
                 </div>
                 
                 <div className="flex items-center gap-3">
-                  <LanguageSelector />
-                  <ThemeToggle />
+                  <Suspense fallback={<span>Loading...</span>}>
+                    <LanguageSelector />
+                  </Suspense>
+                  <Suspense fallback={<span>Loading...</span>}>
+                    <ThemeToggle />
+                  </Suspense>
                   
                   {/* User Profile */}
                   <div className="flex items-center gap-2 ml-2">
@@ -205,7 +233,9 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
               
               {/* Main Content */}
               <main className="flex-1 overflow-auto" data-testid="main-content">
-                <Router />
+                <Suspense fallback={<LoadingFallback />}>
+                  <AppRouter />
+                </Suspense>
               </main>
             </div>
           </div>
@@ -223,7 +253,9 @@ const MainApp: React.FC<{ user: any }> = ({ user }) => {
 function App() {
   return (
     <AuthProvider>
-      <AuthenticatedApp />
+      <Suspense fallback={<LoadingFallback />}>
+        <AuthenticatedApp />
+      </Suspense>
     </AuthProvider>
   );
 }
